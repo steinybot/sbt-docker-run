@@ -1,7 +1,8 @@
 package ch.timo_schmid.sbt.dockerRun
 
-import java.io.{BufferedWriter, FileWriter, InputStream, OutputStream}
+import ch.timo_schmid.sbt.dockerRun.PortOps.ContainerPort
 
+import java.io.{BufferedWriter, FileWriter, InputStream, OutputStream}
 import play.api.libs.json._
 import sbt.Keys._
 import sbt._
@@ -95,6 +96,11 @@ object DockerRunPlugin extends AutoPlugin {
                                      stdout: InputStream => Unit = _ => (),
                                      stderr: InputStream => Unit = _ => (),
                                      onExit: Int => Unit = _ => ())
+
+    val dockerLocalhost: String = "127.0.0.1"
+
+    implicit def toContainerPort(containerPort: Int): ContainerPort =
+      ContainerPort(containerPort)
 
     implicit def toPortOps(port: Int): PortOps =
       new PortOps(port)
@@ -286,11 +292,14 @@ object DockerRunPlugin extends AutoPlugin {
       .field("PortBindings")
     val expected: JsValue = new JsObject(ports.foldLeft(Map.empty[String, JsArray]) {
       case (map, portMapping) =>
-        val local = s"${portMapping.local}/tcp"
-        val mappings = map.getOrElse(local, JsArray.empty)
-        val mapping = JsObject(Seq("HostIp" -> JsString(""), "HostPort" -> JsString(portMapping.container.toString)))
+        val protocol = portMapping.protocol.getOrElse("tcp")
+        val container = s"${portMapping.containerPort}/$protocol"
+        val mappings = map.getOrElse(container, JsArray.empty)
+        val hostIp = JsString(portMapping.hostInterface.getOrElse(""))
+        val hostPort = JsString(portMapping.hostPort.toString)
+        val mapping = JsObject(Seq("HostIp" -> hostIp, "HostPort" -> hostPort))
         val updatedMappings = mappings :+ mapping
-        map + (local -> updatedMappings)
+        map + (container -> updatedMappings)
     })
     if (actual == expected) {
       true
@@ -375,7 +384,7 @@ object DockerRunPlugin extends AutoPlugin {
 
   private def containerPortsOptions(container: DockerContainer): List[String] =
     container.ports
-      .flatMap(port => List("-p", s"${port.local}:${port.container}"))
+      .flatMap(port => List("-p", port.toString))
 
   private def containerEnvOptions(container: DockerContainer): List[String] =
     container.environment.toList
