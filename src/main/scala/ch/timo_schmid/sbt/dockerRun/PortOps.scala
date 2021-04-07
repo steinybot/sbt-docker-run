@@ -1,8 +1,11 @@
 package ch.timo_schmid.sbt.dockerRun
 
-final class PortOps(local: Int) {
+import ch.timo_schmid.sbt.dockerRun.HostPort.StaticPort
+import ch.timo_schmid.sbt.dockerRun.PortMappingOps.WithStaticPort
 
-  def `:`(container: Int): PortMapping =
-    PortMapping(local, container)
+final class PortOps(val local: Int) extends AnyVal {
+
+  def `:`(container: Int): WithStaticPort =
+    WithStaticPort(None, StaticPort(container))
 
 }
